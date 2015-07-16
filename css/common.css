@@ -1,0 +1,25 @@
+svg text {
+	text-overflow: ellipsis;
+}
+
+.marker-source {
+	color: #E74C3C;
+}
+
+.marker-target {
+}
+
+#myholder {
+	overflow: hidden;
+}
+
+.tooltip {
+	display:none;
+	position:absolute;
+	border:1px solid #333;
+	background-color:#161616;
+	border-radius:5px;
+	padding:10px;
+	color:#fff;
+	font-size:12px Arial;
+}
