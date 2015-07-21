@@ -43,12 +43,120 @@ function Collection(collectionId, tasks) {
 };
 
 var properties = [];
-for (var i = 1; i <= 4; i ++) {
+
+propertyIds =  [ 
+  "DataPublisherOutputAddress",
+  "FLPSenderInputAddress",
+  "FLPSenderHeartbeatInputAddress",
+  "EPNReceiverInputAddress",
+  "EPNReceiverOutputAddress",
+  "TrackingOutputAddress",
+  "CollectorInputAddress"
+];
+
+for (var i = 0; i < propertyIds.length; i ++) {
+  var property = new Property(propertyIds[i]);
+  properties.push(property);
+};
+/*for (var i = 1; i <= 4; i ++) {
   var property = new Property("property"+i);
   properties.push(property);
-}
+}*/
 
 var tasks = [];
+
+        
+var exeOne = new Exe(true, '$ALICEO2_INSTALL_DIR/bin/aliceHLTW');
+var taskOneProperties = [{
+  access: 'write',
+  property: properties[0]
+}];
+var taskOne = new Task('dataPublisher', exeOne, undefined, taskOneProperties);
+tasks.push(taskOne);
+
+var exeTwo = new Exe(true, '$ALICEO2_INSTALL_DIR/bin/aliceHLTWrapper Relay');
+var taskTwoProperties = [{
+  access: 'read',
+  property: properties[0]
+}, {
+  access: 'read',
+  property: properties[1]
+}];
+var taskTwo = new Task('relay', exeTwo, undefined, taskTwoProperties);
+tasks.push(taskTwo);
+
+var exeThree = new Exe(true, '$ALICEO2_INSTALL_DIR/bin/flpSender_dds');
+var taskThreeProperties = [{
+  access: 'write',
+  property: properties[1]
+}, {
+  access: 'write',
+  property: properties[2]
+}, {
+  access: 'read',
+  property: properties[3]
+}];
+var taskThree = new Task('flpSender', exeThree, undefined, taskThreeProperties);
+tasks.push(taskThree);
+
+var exeFour = new Exe(true, '$ALICEO2_INSTALL_DIR/bin/epnReceiver_dds');
+var taskFourProperties = [{
+  access: 'read',
+  property: properties[2]
+}, {
+  access: 'write',
+  property: properties[3]
+}, {
+  access: 'write',
+  property: properties[4]
+}];
+var taskFour = new Task('epnReciever', exeFour, undefined, taskFourProperties);
+tasks.push(taskFour);
+
+var exeFive = new Exe(true, '$ALICEO2_INSTALL_DIR/bin/aliceHLTWrapper Tracker');
+var taskFiveProperties = [{
+  access: 'read',
+  property: properties[4]
+}, {
+  access: 'write',
+  property: properties[5]
+}];
+var taskFive = new Task('tracker', exeFive, undefined, taskFiveProperties);
+tasks.push(taskFive);
+
+var exeSix = new Exe(true, '$ALICEO2_INSTALL_DIR/bin/aliceHLTWrapper GlobalMerge');
+var taskSixProperties = [{
+  access: 'read',
+  property: properties[5]
+}, {
+  access: 'read',
+  property: properties[6]
+}];
+var taskSix = new Task('merger', exeSix, undefined, taskSixProperties);
+tasks.push(taskSix);
+
+var exeSeven = new Exe(true, '$ALICEO2_INSTALL_DIR/bin/aliceHLTWrapper Collector 1');
+var taskSevenProperties = [{
+  access: 'write',
+  property: properties[6]
+}];
+var taskSeven = new Task('collector', exeSeven, undefined, taskSevenProperties);
+tasks.push(taskSeven);
+
+var mainTasks = [tasks[6]];
+
+var collections = [];
+var collectionOneTasks = [tasks[0], tasks[1], tasks[2]];
+var collectionOne = new Collection('flpcollection', collectionOneTasks);
+collections.push(collectionOne);
+
+var collectionTwoTasks = [tasks[3], tasks[4], tasks[5]];
+var collectionTwo = new Collection('epncollection', collectionTwoTasks);
+collections.push(collectionTwo);
+var mainCollections = [];
+
+/*
+-- OLDTESTDATA----
 var exeOne = new Exe(true, 'app1 -l -n');
 var envOne = new Env(false, 'env1');
 var taskOneProperties = [properties[0]].concat(properties[3]).concat(properties[0]);
@@ -74,6 +182,7 @@ var exeFive = new Exe(false, 'app5');
 var taskFiveProperties = [properties[0]];
 var taskFive = new Task('task5', exeFive, undefined, taskFiveProperties);
 tasks.push(taskFive);
+var mainTasks = [tasks[0], tasks[0]];
 
 var collections = [];
 var collectionOneTasks = [tasks[0], tasks[1], tasks[1], tasks[2]];
@@ -83,9 +192,20 @@ collections.push(collectionOne);
 var collectionTwoTasks = [tasks[3], tasks[3], tasks[4]];
 var collectionTwo = new Collection('collection2', collectionTwoTasks);
 collections.push(collectionTwo);
+var mainCollections = [collections[0], collections[0]];
 
+var groupOneTasks = [tasks[0], tasks[0]];
+var groupOneCollections = [collections[0], collections[1]];
+var groupOneMultiplicity = 10;
+var groupOne = new Group('group1', groupOneCollections, groupOneTasks, groupOneMultiplicity);
+mainGroups.push(groupOne);
 
-//----------------------------
+var groupTwoTasks = [tasks[2], tasks[3]];
+var groupTwoCollections = [collections[0], collections[1]];
+var groupTwoMultiplicity = 15;
+var groupTwo = new Group('group2', groupTwoCollections, groupTwoTasks, groupTwoMultiplicity);
+mainGroups.push(groupTwo);
+*/
 var GROUP = {
   groupId: '',
   collections: [],
@@ -94,20 +214,37 @@ var GROUP = {
 };
 function Group(groupId, collections, tasks, multiplicity) {
   this.groupId = groupId;
-  this.colllections = collections;
+  this.collections = collections;
   this.tasks = tasks;
   this.multiplicity = multiplicity;
 };
 
-var groupOneTasks =  [tasks[0], tasks[0]];
-var groupOneCollections = [collections[0], collections[1]];
-var groupOneMultiplicity = 10;
-var groupOne = new Group('group1', groupOneCollections, groupOneTasks, groupOneMultiplicity);
+var mainGroups = [];
+var groupOneTasks = [];
+var groupOneCollections = [collections[0]];
+var groupOneMultiplicity = 2;
+var groupOne = new Group('groupFLP', groupOneCollections, groupOneTasks, groupOneMultiplicity);
+mainGroups.push(groupOne);
 
-var groupTwoTasks =  [tasks[2], tasks[3]];
-var groupTwoCollections = [collections[0], collections[1]];
-var groupTwoMultiplicity = 10;
-var groupTwo = new Group('group1', groupTwoCollections, groupTwoTasks, groupTwoMultiplicity);
+var groupTwoTasks = [];
+var groupTwoCollections = [collections[1]];
+var groupTwoMultiplicity = 4;
+var groupTwo = new Group('groupEPN', groupTwoCollections, groupTwoTasks, groupTwoMultiplicity);
+mainGroups.push(groupTwo);
+
+
+
+
+/*
+
+
+
+*/
+var mainPlot = {
+  tasks: mainTasks,
+  collections: mainCollections,
+  groups: mainGroups
+} 
 
 var mockCollection = {
   name: "interpolations",
@@ -122,23 +259,24 @@ var mockCollection = {
 /* Graphical representation: Constants and objects */
 var PADDING = 10;
 var TASK_METRICS = {
+  x: PADDING,
+  y: 60,
   width: 100,
   height: 30
 };
 
 var COLLECTION_METRICS = {
-  x: 100,
+  x: 460,
   y: 60,
-  widthMin: (TASK_METRICS.width + 2 * PADDING),
-  widthMax: (TASK_METRICS.width * 2 + 3 * PADDING)
+  widthMin: (TASK_METRICS.width + 2 * PADDING), // 120
+  widthMax: (TASK_METRICS.width * 2 + 3 * PADDING) // 230
 };
 
 var TransparentContainer = new joint.shapes.basic.Rect({
-    position: { 
+    position: {
       x: 0,
       y: 0 
     },
-
     attrs: { rect: { 
         fill: {
           color:'blue',
@@ -189,13 +327,14 @@ var CollectionElement = new joint.shapes.basic.Rect({
 }); 
 
 var GROUP_METRICS = {
-  x: 200,
-  y: 60,
-  widthMin: (COLLECTION_METRICS.widthMin + 2 * PADDING),
-  widthMax: (COLLECTION_METRICS.widthMin * 2 + 3 * PADDING),
+  x: 160,
+  y: 6 * PADDING,
+  widthMin: (COLLECTION_METRICS.widthMin + 2 * PADDING), // 140
+  widthMax: (COLLECTION_METRICS.widthMin * 2 + 3 * PADDING), // 270
   height: 30
 };
 
+//----------------------
 var taskRect = new joint.shapes.basic.Rect({
     position: {
       x: 0, //(COLLECTION_METRICS.x + PADDING),
@@ -234,6 +373,16 @@ var TITLE = new joint.shapes.basic.Text({
 TITLE.prop('draggable', 'OFF');
 var mockProperties = ["3sec CPU time","100MB of RAM", "3GB Disk Space", "RMS to single", "RMS to printer"];
 
+
+/*acts as a saver of all links and elements in the graph*/
+var GRAPH_MIDDLEMAN = {
+  jointElements: [],
+  jointLinks: []
+};
+function GraphMiddleman(jointElements, jointLinks) {
+  this.jointElements = jointElements;
+  this.jointLinks = jointLinks;
+}
 /* Utility functions
 collection requires the number of tasks to know its height*
 group requires collections and tasks to know height
@@ -274,6 +423,10 @@ function taskFactory(name) {
   return temptaskRect;
 }
 
+function displayTask(task) {
+  graph.addCells([task]);
+}
+
 function collectionFactory(collectionName, taskNames) {
   var data = {title: TITLE.clone(), tasks: []};
   changeText(data.title, collectionName);
@@ -300,21 +453,24 @@ function populateCollection(collection, data, titless) {
     }
   } else {
     data.title.translate(collection.get('position').x + 2.5 * PADDING,
-                       collection.get('position').y + PADDING);
+      collection.get('position').y + PADDING);
     initialY = data.title.get('position').y + 2 * PADDING;
   }
   var lowerEnd = 0;
-  for (var i = 0; i < data.tasks.length; i ++) {
-    data.tasks[i].translate(initialX, initialY);
-    data.tasks[i].translate(0, i * (TASK_METRICS.height * 1.15));
-    lowerEnd = data.tasks[i].getBBox().corner().y;
-  }
-  collection.set('size', {width: (TASK_METRICS.width + 2 * PADDING),
-                         height: (lowerEnd - collection.get('position').y + PADDING)})
-  collection.embed(data.title);      
+  data.tasks.forEach( function (task, i) {
+    task.translate(initialX, initialY);
+    task.translate(0, i * (TASK_METRICS.height * 1.60));
+    lowerEnd = task.getBBox().corner().y;
+  })
+  collection.set('size', {
+    width: (TASK_METRICS.width + 2 * PADDING),
+    height: (lowerEnd - collection.get('position').y + PADDING)
+  });
+  collection.embed(data.title);   
   data.tasks.map( function(task) {
     collection.embed(task);
   });
+  return collection;
 }
 
 /* displays @collection */
@@ -336,9 +492,9 @@ function populateGroup(groupBox, infoGroup) {
   var lowerEndRight = 0;
   var lowerEndLeft = 0;
   var groupIdBox = TITLE.clone();
-  changeText(groupIdBox, 'Group');
+  changeText(groupIdBox, infoGroup.groupId);
   groupIdBox.translate(groupBox.get('position').x + 2.5 * PADDING,
-                       groupBox.get('position').y + PADDING);
+    groupBox.get('position').y + PADDING);
   var collectionSet = [];
   lowerEndLeft = groupIdBox.getBBox().corner().y;
   lowerEndRight = lowerEndLeft;
@@ -355,8 +511,7 @@ function populateGroup(groupBox, infoGroup) {
      from the left and large on the right */
     var tempCollection = CollectionElement.clone();
     if (lowerEndLeft <= lowerEndRight) {
-      tempCollection.translate(leftTranslation,
-                               lowerEndLeft + PADDING);
+      tempCollection.translate(leftTranslation, lowerEndLeft + PADDING);
       populateCollection(tempCollection, infoGroup.collections[i]);
       lowerEndLeft = tempCollection.getBBox().corner().y;
     } else  {
@@ -395,6 +550,7 @@ function populateGroup(groupBox, infoGroup) {
   collectionSet.map( function (collection) {
     groupBox.embed(collection.collection);
   });
+  GroupElement.set('position', {x: GROUP_METRICS.x + PADDING, y: groupBox.getBBox().corner().y})
   return [{plot:groupBox, title: groupIdBox, numberBox: multiplicityContainer}].concat([{data: collectionSet}]);
 }
 
@@ -406,6 +562,132 @@ function displayGroup(group, data) {
     displayCollection(element.collection, element.tasks)
   });
   graph.addCells([group.numberBox])
+}
+
+
+function displayPropertyLinks(property, graph, jointJsMiddleman) {
+  var propLinks = getLinksWithProperty(graph, jointJsMiddleman, property);
+  graph.addCells(propLinks);
+}
+
+function mapTemplate(contentMain) {
+  var collectionYielder = CollectionElement.clone();
+  collectionYielder.set('position', {
+    x: COLLECTION_METRICS.x,
+    y: COLLECTION_METRICS.y
+  });
+  for (var i = 0; i < contentMain.collections.length; i ++) {
+    console.log(extractProperties(contentMain.collections[i].tasks, 'taskId'));
+    var collectData = collectionFactory(contentMain.collections[i].collectionId,
+      extractProperties(contentMain.collections[i].tasks, 'taskId'));
+    collectData.tasks.forEach (function (task, j) {
+      task.prop('properties', contentMain.collections[i].tasks[j].properties);
+      console.log(task.prop('properties'));
+    });
+    var colCell = collectionYielder.clone();
+    var collection = populateCollection(colCell, collectData);
+    collectionYielder.set('position', {
+      x: collectionYielder.get('position').x,
+      y: collection.getBBox().corner().y + PADDING
+    })
+
+    displayCollection(collection, collectData);
+  }
+  var GroupYielder = GroupElement.clone();
+  for (var i = 0; i < contentMain.groups.length; i ++) {
+    var groupCollections = contentMain.groups[i].collections.map( function (collection) {
+      return collectionFactory(collection.collectionId,
+          extractProperties(collection.tasks, 'taskId'));
+    });
+    var groupTasks = extractProperties(contentMain.groups[i].tasks, 'taskId').map(function (taskId) {
+      return taskFactory(taskId);
+    });
+    groupCollections.forEach( function(collection, m) {
+      collection.tasks.forEach ( function(task, k) {
+        task.prop('properties', contentMain.groups[i].collections[m].tasks[k].properties);
+      })
+    });
+    groupTasks.forEach (function (task, j) {
+      task.prop('properties', contentMain.groups[i].tasks[j].properties);
+      console.log(task.prop('properties'));
+    });
+    var tObject = {
+      collections: groupCollections,
+      groupId: contentMain.groups[i].groupId,
+      multiplicity: contentMain.groups[i].multiplicity,
+      tasks: groupTasks
+    }
+    var group = populateGroup(GroupYielder.clone(), tObject);
+    GroupYielder.set('position', {
+      x: GROUP_METRICS.x,
+      y: (group[0].plot.getBBox().corner().y + PADDING)
+    });
+    displayGroup(group[0], group[1]);
+  }
+  for (var i = 0; i < contentMain.tasks.length; i ++) {
+    var mainTask = taskFactory(contentMain.tasks[i].taskId);
+    mainTask.translate(TASK_METRICS.x, TASK_METRICS.y);
+    mainTask.translate(0, i * (TASK_METRICS.height + PADDING));
+    mainTask.prop('properties', contentMain.tasks[i].properties);
+    displayTask(mainTask);
+  }
+}
+
+function mapLinks() {
+  var plotLinks = [];
+  var plotTasks = sieveByProperty(graph.getElements(), 'properties');
+  for (var i = 0; i < plotTasks.length; i ++) {
+    for (var j = i + 1; j < plotTasks.length; j ++) {
+      if (plotTasks[i].get('attrs').text.text != plotTasks[j].get('attrs').text.text) {
+        plotTasks[i].prop('properties').forEach (function (_property) {
+          var propAttrs = extractProperties(plotTasks[j].prop('properties'), 'property');
+          if (_.indexOf(extractProperties(propAttrs, 'prId'), _property.property.prId) > -1) {
+            var source,
+                target;
+            if (_property.access === 'write') {
+              source = plotTasks[i];
+              target = plotTasks[j];
+            } else {
+              source = plotTasks[j];
+              target = plotTasks[i];
+            }
+            var link = new joint.dia.Link({
+              source: { id: source.id },
+              target: { id: target.id }
+            });
+            link.attr({
+              '.connection-wrap': {
+                'title': _property.property.prId
+              },
+              '.connection': { 
+                stroke: 'blue',
+                'stroke-width': 4
+              },
+              '.marker-target': {
+                fill: 'yellow',
+                d: 'M 10 0 L 0 5 L 10 10 z'
+              }
+            });
+              plotLinks.push(link);
+          }
+        });
+      }
+    }
+  }
+  return plotLinks;
+}
+
+function setPropertyList(properties, graph, jointJsMiddleman) {
+  var sel = document.getElementById('PropertyList');
+  sel.setAttribute('onChange', displayPropertyLinks("property1", graph, jointJsMiddleman));    displayPropertyLinks
+  var fragment = document.createDocumentFragment();
+  properties.forEach(function(property) {
+      var opt = document.createElement('option');
+      opt.innerHTML = property.prId;
+      opt.value = property.prId;
+      fragment.appendChild(opt);
+  });
+  sel.appendChild(fragment);
 }
 
 /* Plotting starts here */
@@ -421,13 +703,13 @@ var paper = new joint.dia.Paper({
 
 /* event handlers */
 graph.on('all', function(eventName, cell) {
-      console.log(arguments);
+      //console.log(arguments);
 });
 
 paper.on('cell:mouseover', function(cellView) {
   if (cellView.model instanceof joint.dia.Element) {
     if (cellView.model.prop('draggable') == 'OFF') {
-        console.log('here');
+      console.log('here');
         cellView.model.attr('rect/style/pointer-events', 'none');
         cellView.model.attr('text/style/pointer-events', 'none');
         return;
@@ -438,44 +720,45 @@ paper.on('cell:mouseover', function(cellView) {
 paper.on('cell:mouseout', function(cellView) {
   if (cellView.model instanceof joint.dia.Element) {
     if (cellView.model.prop('draggable') == 'OFF') {
-        console.log('out');
-        cellView.model.attr('rect/style/pointer-events', 'none');
-        cellView.model.attr('text/style/pointer-events', 'none');
-        return;
+      console.log('out');
+      cellView.model.attr('rect/style/pointer-events', 'none');
+      cellView.model.attr('text/style/pointer-events', 'none');
+      return;
     }
   }
 });
 
 graph.on('change:position', function(cell) {
 
-    var parentId = cell.get('parent');
-    if (!parentId) return;
+  var parentId = cell.get('parent');
+  if (!parentId) return;
 
-    var parent = graph.getCell(parentId);
-    var parentBbox = parent.getBBox();
-    var cellBbox = cell.getBBox();
+  var parent = graph.getCell(parentId);
+  var parentBbox = parent.getBBox();
+  var cellBbox = cell.getBBox();
 
-    if (parentBbox.containsPoint(cellBbox.origin()) &&
-        parentBbox.containsPoint(cellBbox.topRight()) &&
-        parentBbox.containsPoint(cellBbox.corner()) &&
-        parentBbox.containsPoint(cellBbox.bottomLeft())) {
+  if (parentBbox.containsPoint(cellBbox.origin()) &&
+    parentBbox.containsPoint(cellBbox.topRight()) &&
+    parentBbox.containsPoint(cellBbox.corner()) &&
+    parentBbox.containsPoint(cellBbox.bottomLeft())) {
 
-        // All the four corners of the child are inside
-        // the parent area.
-        return;
-    }
+    // All the four corners of the child are inside
+    // the parent area
+    return;
+  }
 
-    // Revert the child position.
-    cell.set('position', cell.previous('position'));
+  // Revert the child position.
+  cell.set('position', cell.previous('position'));
 });
 
 //------------------------------------------
 /* making  a collection */
 var collectData = collectionFactory(mockCollection.name, mockCollection.taskNames);
 var colCell = CollectionElement.clone();
-populateCollection(colCell, collectData);
+colCell.set('position', {x: 460, y: 60})
+//populateCollection(colCell, collectData);
 console.log(collectData);
-displayCollection(colCell, collectData);
+//displayCollection(colCell, collectData);
 
 /* making  a group */
 var GroupElement = new joint.shapes.basic.Rect({
@@ -483,16 +766,16 @@ var GroupElement = new joint.shapes.basic.Rect({
     x: GROUP_METRICS.x,
     y: GROUP_METRICS.y
   },
-  size: { 
+  size: {
     width: GROUP_METRICS.widthMin,
     height: GROUP_METRICS.height
   },
-  attrs: { 
+  attrs: {
     rect: { 
       fill: '#FF7F00',
-      rx: 2, 
-      ry: 2 
-    } 
+      rx: 2,
+      ry: 2
+    }
   }
 });
 
@@ -512,9 +795,6 @@ for (var i = 0; i <= 2; i ++) {
   groupCollections.push(tempCollection);
 }
 
-var Gtext = TITLE.clone();
-console.log(groupCollections.length);
-changeText(Gtext, 'Group');
 
 var groupTasks = [];
 for (var j = 0; j <= 1; j ++) {
@@ -522,28 +802,32 @@ for (var j = 0; j <= 1; j ++) {
 }
 
 var groupData = {
-  title: Gtext,
+  groupId: 'Group',
   collections: groupCollections,
   tasks: groupTasks,
   multiplicity: 20
 }
 
-var group = populateGroup(GroupElement.clone(), groupData);
-displayGroup(group[0], group[1]);
+//var group = populateGroup(GroupElement.clone(), groupData);
+//displayGroup(group[0], group[1]);
 
-var link = new joint.dia.Link({
-  source: { id: group[1].data[2].tasks.tasks[0].id },
+mapTemplate(mainPlot);
+graph.addCells(mapLinks());
+var graphMiddleman = new GraphMiddleman(graph.getElements(), graph.getLinks());
+//setPropertyList(properties, graph, graphMiddleman);
+/*var link = new joint.dida.Link({
+  source: { id: group[1].data[1].tasks.tasks[0].id },
   target: { id: collectData.tasks[1].id }
 });
 
 link.attr({
-    '.connection': { stroke: 'blue', 'stroke-width': 4},
-    '.marker-source': { fill: 'yellow', d: 'M 10 0 L 0 5 L 10 10 z' },
-    '.marker-target': { fill: 'yellow', d: 'M 10 0 L 0 5 L 10 10 z' }
+  '.connection': { stroke: 'blue', 'stroke-width': 4},
+  '.marker-source': { fill: 'yellow', d: 'M 10 0 L 0 5 L 10 10 z' },
+  '.marker-target': { fill: 'yellow', d: 'M 10 0 L 0 5 L 10 10 z' }
 });
 
 graph.addCells([link]);
-
+*/
 var nodesGraph = new joint.dia.Graph;
 
 var nodesPaper = new joint.dia.Paper({
