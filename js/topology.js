@@ -232,14 +232,6 @@ var groupTwoMultiplicity = 4;
 var groupTwo = new Group('groupEPN', groupTwoCollections, groupTwoTasks, groupTwoMultiplicity);
 mainGroups.push(groupTwo);
 
-
-
-
-/*
-
-
-
-*/
 var mainPlot = {
   tasks: mainTasks,
   collections: mainCollections,
@@ -259,14 +251,14 @@ var mockCollection = {
 /* Graphical representation: Constants and objects */
 var PADDING = 10;
 var TASK_METRICS = {
-  x: PADDING,
+  x: 0,
   y: 60,
   width: 100,
   height: 30
 };
 
 var COLLECTION_METRICS = {
-  x: 460,
+  x: PADDING,
   y: 60,
   widthMin: (TASK_METRICS.width + 2 * PADDING), // 120
   widthMax: (TASK_METRICS.width * 2 + 3 * PADDING) // 230
@@ -327,14 +319,13 @@ var CollectionElement = new joint.shapes.basic.Rect({
 }); 
 
 var GROUP_METRICS = {
-  x: 160,
+  x: PADDING,
   y: 6 * PADDING,
   widthMin: (COLLECTION_METRICS.widthMin + 2 * PADDING), // 140
   widthMax: (COLLECTION_METRICS.widthMin * 2 + 3 * PADDING), // 270
   height: 30
 };
 
-//----------------------
 var taskRect = new joint.shapes.basic.Rect({
     position: {
       x: 0, //(COLLECTION_METRICS.x + PADDING),
@@ -371,8 +362,6 @@ var TITLE = new joint.shapes.basic.Text({
     }
 });
 TITLE.prop('draggable', 'OFF');
-var mockProperties = ["3sec CPU time","100MB of RAM", "3GB Disk Space", "RMS to single", "RMS to printer"];
-
 
 /*acts as a saver of all links and elements in the graph*/
 var GRAPH_MIDDLEMAN = {
@@ -564,13 +553,18 @@ function displayGroup(group, data) {
   graph.addCells([group.numberBox])
 }
 
-
+/* adds @PropertyList onChange functionality */
 function displayPropertyLinks(property, graph, jointJsMiddleman) {
   var propLinks = getLinksWithProperty(graph, jointJsMiddleman, property);
-  graph.addCells(propLinks);
+  propLinks.forEach( function (link) {
+    link.attr('.connection/stroke', 'red');
+  })
 }
 
+
+/* Maps @groups, @collections, @tasks that are in main */
 function mapTemplate(contentMain) {
+  var shifterX = PADDING;
   var collectionYielder = CollectionElement.clone();
   collectionYielder.set('position', {
     x: COLLECTION_METRICS.x,
@@ -586,11 +580,11 @@ function mapTemplate(contentMain) {
     });
     var colCell = collectionYielder.clone();
     var collection = populateCollection(colCell, collectData);
+    shifterX = collection.getBBox().corner().x + PADDING;
     collectionYielder.set('position', {
-      x: collectionYielder.get('position').x,
-      y: collection.getBBox().corner().y + PADDING
+      x: shifterX,
+      y: collectionYielder.get('position').y
     })
-
     displayCollection(collection, collectData);
   }
   var GroupYielder = GroupElement.clone();
@@ -618,21 +612,24 @@ function mapTemplate(contentMain) {
       tasks: groupTasks
     }
     var group = populateGroup(GroupYielder.clone(), tObject);
+    shifterX = group[0].plot.getBBox().corner().x + 2 * PADDING;    
     GroupYielder.set('position', {
-      x: GROUP_METRICS.x,
-      y: (group[0].plot.getBBox().corner().y + PADDING)
+      x: shifterX,
+      y: GROUP_METRICS.y,
     });
     displayGroup(group[0], group[1]);
   }
   for (var i = 0; i < contentMain.tasks.length; i ++) {
     var mainTask = taskFactory(contentMain.tasks[i].taskId);
-    mainTask.translate(TASK_METRICS.x, TASK_METRICS.y);
-    mainTask.translate(0, i * (TASK_METRICS.height + PADDING));
+    mainTask.translate(shifterX, TASK_METRICS.y);
+    mainTask.translate((i / 5) * (TASK_METRICS.width + PADDING),
+        i * (TASK_METRICS.height + PADDING));
     mainTask.prop('properties', contentMain.tasks[i].properties);
     displayTask(mainTask);
   }
 }
 
+/* maps @properties Linkss */
 function mapLinks() {
   var plotLinks = [];
   var plotTasks = sieveByProperty(graph.getElements(), 'properties');
@@ -653,7 +650,8 @@ function mapLinks() {
             }
             var link = new joint.dia.Link({
               source: { id: source.id },
-              target: { id: target.id }
+              target: { id: target.id },
+              connector: {name: 'rounded'}
             });
             link.attr({
               '.connection-wrap': {
@@ -668,7 +666,7 @@ function mapLinks() {
                 d: 'M 10 0 L 0 5 L 10 10 z'
               }
             });
-              plotLinks.push(link);
+            plotLinks.push(link);
           }
         });
       }
@@ -677,9 +675,9 @@ function mapLinks() {
   return plotLinks;
 }
 
+/* creates @properties dropdown */
 function setPropertyList(properties, graph, jointJsMiddleman) {
   var sel = document.getElementById('PropertyList');
-  sel.setAttribute('onChange', displayPropertyLinks("property1", graph, jointJsMiddleman));    displayPropertyLinks
   var fragment = document.createDocumentFragment();
   properties.forEach(function(property) {
       var opt = document.createElement('option');
@@ -751,14 +749,19 @@ graph.on('change:position', function(cell) {
   cell.set('position', cell.previous('position'));
 });
 
+var myAdjustVertices = _.partial(adjustVertices, graph);
+
+// adjust vertices when a cell is removed or its source/target was changed
+graph.on('add remove change:source change:target', myAdjustVertices);
+
+// also when an user stops interacting with an element.
+paper.on('cell:pointerup', myAdjustVertices);
 //------------------------------------------
 /* making  a collection */
 var collectData = collectionFactory(mockCollection.name, mockCollection.taskNames);
 var colCell = CollectionElement.clone();
-colCell.set('position', {x: 460, y: 60})
-//populateCollection(colCell, collectData);
+colCell.set('position', {x: 460, y: 60});
 console.log(collectData);
-//displayCollection(colCell, collectData);
 
 /* making  a group */
 var GroupElement = new joint.shapes.basic.Rect({
@@ -814,20 +817,8 @@ var groupData = {
 mapTemplate(mainPlot);
 graph.addCells(mapLinks());
 var graphMiddleman = new GraphMiddleman(graph.getElements(), graph.getLinks());
-//setPropertyList(properties, graph, graphMiddleman);
-/*var link = new joint.dida.Link({
-  source: { id: group[1].data[1].tasks.tasks[0].id },
-  target: { id: collectData.tasks[1].id }
-});
+setPropertyList(properties, graph, graphMiddleman);
 
-link.attr({
-  '.connection': { stroke: 'blue', 'stroke-width': 4},
-  '.marker-source': { fill: 'yellow', d: 'M 10 0 L 0 5 L 10 10 z' },
-  '.marker-target': { fill: 'yellow', d: 'M 10 0 L 0 5 L 10 10 z' }
-});
-
-graph.addCells([link]);
-*/
 var nodesGraph = new joint.dia.Graph;
 
 var nodesPaper = new joint.dia.Paper({
@@ -848,35 +839,47 @@ for (var i = 0; i < visTasks.length; i ++) {
   visTasks[i].rectBox.translate((6 * PADDING) * ((i % 3) + 1) + (i % 3) * TASK_METRICS.width,
                                 (10 * PADDING)* Math.floor(1 + (i / 3)));
   for (var j = 0; j < visTasks[i].task.properties.length; j++) {
-     for (var k = i + 1; k < visTasks.length; k ++) {
-        if (_.contains(visTasks[k].task.properties, visTasks[i].task.properties[j])) {
-          var propLink = new joint.dia.Link({
-            source: { id: visTasks[i].rectBox.id },
-            target: { id: visTasks[k].rectBox.id },
-            connector: {name: 'rounded'}
-          });
-          propLink.attr({
-              '.connection-wrap': {
-                'title': visTasks[i].task.properties[j].prId
-              },
-              '.connection': { 
-                stroke: 'blue',
-                'stroke-width': 4
-              },
-              '.marker-source': { 
-                fill: 'yellow',
-                d: 'M 10 0 L 0 5 L 10 10 z'
-              },
-              '.marker-target': {
-                fill: 'yellow',
-                d: 'M 10 0 L 0 5 L 10 10 z'
-              }
-          });
-          propLinks.push(propLink);
+    for (var k = i + 1; k < visTasks.length; k ++) {
+      if (_.contains(extractProperties(visTasks[k].task.properties, 'property'),
+        visTasks[i].task.properties[j].property)) {
+        var sourceId = visTasks[i].rectBox.id;
+        var targetId = visTasks[k].rectBox.id;
+        if (visTasks[i].task.properties[j].access === 'read') {
+          sourceId = visTasks[k].rectBox.id;
+          targetId = visTasks[i].rectBox.id;
+        } 
+        var propLink = new joint.dia.Link({
+          source: { id: sourceId },
+          target: { id: targetId },
+          connector: {name: 'rounded'}
+        });
+        propLink.attr({
+          '.connection-wrap': {
+            'title': visTasks[i].task.properties[j].property.prId
+           },
+          '.connection': { 
+            stroke: 'blue',
+            'stroke-width': 4
+          },
+          '.marker-target': {
+            fill: 'yellow',
+            d: 'M 10 0 L 0 5 L 10 10 z'
+            }
+        })
+        propLinks.push(propLink);
         }
      }
   }
 }
+
+
+/* -------nodesGraph Events ----------- */
+
+var nodesMyAdjustVertices = _.partial(adjustVertices, nodesGraph);
+nodesGraph.on('add remove change:source change:target', nodesMyAdjustVertices);
+nodesPaper.on('cell:pointerup', nodesMyAdjustVertices);
+
+/*------------------------------------- */
 
 nodesGraph.addCells(visTasks.map(function (vistask) {
   return vistask.rectBox;
