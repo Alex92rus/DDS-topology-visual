@@ -249,6 +249,7 @@ var mockCollection = {
 }
 
 /* Graphical representation: Constants and objects */
+var PAPER_MIDPOINT = 300;
 var PADDING = 10;
 var TASK_METRICS = {
   x: 0,
@@ -261,7 +262,7 @@ var COLLECTION_METRICS = {
   x: PADDING,
   y: 60,
   widthMin: (TASK_METRICS.width + 2 * PADDING), // 120
-  widthMax: (TASK_METRICS.width * 2 + 3 * PADDING) // 230
+  widthMax: (TASK_METRICS.width + 4 * PADDING) // 230
 };
 
 var TransparentContainer = new joint.shapes.basic.Rect({
@@ -298,7 +299,6 @@ var MultiplicityContainer = new joint.shapes.basic.Rect({
         }
       } 
 });
-MultiplicityContainer.prop('draggable', 'OFF');
 
 var CollectionElement = new joint.shapes.basic.Rect({
     position: { 
@@ -350,7 +350,7 @@ var taskRect = new joint.shapes.basic.Rect({
 
 var TITLE = new joint.shapes.basic.Text({
     position: {x: 0, y: 0},
-    size: {width: 70, height:  20},
+    size: {width: 70, height: 20},
     attrs: {text: {
         text: '',
         fill: 'black',
@@ -361,7 +361,6 @@ var TITLE = new joint.shapes.basic.Text({
       }
     }
 });
-TITLE.prop('draggable', 'OFF');
 
 /*acts as a saver of all links and elements in the graph*/
 var GRAPH_MIDDLEMAN = {
@@ -433,29 +432,31 @@ function changeText(textObj, text) {
 }
 
 /* populates @collection with tasks and title in @data object */
-function populateCollection(collection, data, titless) {
-  var initialX = collection.get('position').x + PADDING;
-  var initialY = 0;
-  if (titless !== undefined) {
-    if (titless === true) {
-      initialY = collection.get('position').y + PADDING;
-    }
-  } else {
-    data.title.translate(collection.get('position').x + 2.5 * PADDING,
-      collection.get('position').y + PADDING);
-    initialY = data.title.get('position').y + 2 * PADDING;
-  }
+function populateCollection(collection, data) {
+  var initialX = collection.get('position').x;
+  var initialY = collection.get('position').y + PADDING;
   var lowerEnd = 0;
+  var collectionWidth = TASK_METRICS.width;
+  if (data.title !== undefined) {
+    initialX += data.title.get('size').height;
+    collectionWidth += data.title.get('size').height; 
+  }
   data.tasks.forEach( function (task, i) {
     task.translate(initialX, initialY);
     task.translate(0, i * (TASK_METRICS.height * 1.60));
     lowerEnd = task.getBBox().corner().y;
   })
   collection.set('size', {
-    width: (TASK_METRICS.width + 2 * PADDING),
+    width: (collectionWidth + 2 * PADDING),
     height: (lowerEnd - collection.get('position').y + PADDING)
   });
-  collection.embed(data.title);   
+  if (data.title !== undefined) {
+    var titleX = collection.getBBox().bottomLeft().x - data.title.get('size').width / 3;
+    var titleY = collection.getBBox().bottomLeft().y - (collection.get('size').height / 2);
+    data.title.set('position', {x: titleX, y: titleY});
+    data.title.rotate(-90);
+    collection.embed(data.title);
+  }
   data.tasks.map( function(task) {
     collection.embed(task);
   });
@@ -464,7 +465,10 @@ function populateCollection(collection, data, titless) {
 
 /* displays @collection */
 function displayCollection(collection, data) {
-  graph.addCells([collection].concat(data.title).concat(data.tasks));
+  graph.addCells([collection].concat(data.tasks));
+  if (data.title !== undefined) {
+    graph.addCell(data.title);
+  }
 }
 
 /*
@@ -482,19 +486,23 @@ function populateGroup(groupBox, infoGroup) {
   var lowerEndLeft = 0;
   var groupIdBox = TITLE.clone();
   changeText(groupIdBox, infoGroup.groupId);
-  groupIdBox.translate(groupBox.get('position').x + 2.5 * PADDING,
-    groupBox.get('position').y + PADDING);
+
+/*   //translate should be after filling*/
   var collectionSet = [];
-  lowerEndLeft = groupIdBox.getBBox().corner().y;
+  lowerEndLeft = groupBox.get('position').y + PADDING;
   lowerEndRight = lowerEndLeft;
-  if (infoGroup.collections.length > 1) {
+  rightEnd = 0;
+/*  if (infoGroup.collections.length > 1) {
     groupBox.set('size', {
       width: GROUP_METRICS.widthMax,
       height: GROUP_METRICS.height
     });
+  }*/
+  var rightTranslation = 0;
+  if (infoGroup.collections.length > 0) {
+    rightTranslation = groupBox.get('position').x + COLLECTION_METRICS.widthMax + 2 * PADDING;
   }
-  var rightTranslation = groupBox.get('position').x + COLLECTION_METRICS.widthMin + 2 * PADDING;
-  var leftTranslation = groupBox.get('position').x + PADDING;
+  var leftTranslation = groupBox.get('position').x + PADDING + groupIdBox.get('size').height;
   for (var i = 0; i < infoGroup.collections.length; i ++) {
     /* TO DO: situate these collections better. Edge case : small collections
      from the left and large on the right */
@@ -504,36 +512,44 @@ function populateGroup(groupBox, infoGroup) {
       populateCollection(tempCollection, infoGroup.collections[i]);
       lowerEndLeft = tempCollection.getBBox().corner().y;
     } else  {
-      tempCollection.translate(rightTranslation,
-                               lowerEndRight + PADDING);
+      tempCollection.translate(rightTranslation, lowerEndRight + PADDING);
       populateCollection(tempCollection, infoGroup.collections[i]);
       lowerEndRight = tempCollection.getBBox().corner().y;
     }
+    if (rightEnd < tempCollection.getBBox().corner().x) {
+      rightEnd = tempCollection.getBBox().corner().x + PADDING;
+    }
     collectionSet.unshift({collection: tempCollection, tasks: infoGroup.collections[i]});
   }
-  var freeTasksCollection = TransparentContainer.clone();
-  var empty = TITLE.clone();
-  var freeTasksData = {title: empty, tasks: infoGroup.tasks};
-  if (lowerEndLeft <= lowerEndRight) {
-    freeTasksCollection.translate(leftTranslation, lowerEndLeft + PADDING);
-    populateCollection(freeTasksCollection, freeTasksData, true);
-    lowerEndLeft = freeTasksCollection.getBBox().corner().y;
-  } else {
-    freeTasksCollection.translate(rightTranslation, lowerEndRight + PADDING);
-    populateCollection(freeTasksCollection, freeTasksData, true);
-    lowerEndRight = freeTasksCollection.getBBox().corner().y;
+  if ( infoGroup.tasks.length > 0) {
+    var freeTasksCollection = TransparentContainer.clone();
+    var freeTasksData = {title: undefined, tasks: infoGroup.tasks};
+    if (lowerEndLeft <= lowerEndRight) {
+      freeTasksCollection.translate(leftTranslation, lowerEndLeft + PADDING);
+      populateCollection(freeTasksCollection, freeTasksData, true);
+      lowerEndLeft = freeTasksCollection.getBBox().corner().y;
+    } else {
+      freeTasksCollection.translate(rightTranslation, lowerEndRight + PADDING);
+      populateCollection(freeTasksCollection, freeTasksData, true);
+      lowerEndRight = freeTasksCollection.getBBox().corner().y;
+    }
+    if (rightEnd < freeTasksCollection.getBBox().corner().x) {
+      rightEnd = freeTasksCollection.getBBox().corner().x;
+    }
+    collectionSet.push({collection: freeTasksCollection, tasks: freeTasksData});
   }
-  collectionSet.push({collection: freeTasksCollection, tasks: freeTasksData});
   var groupHeight = (lowerEndRight < lowerEndLeft ? lowerEndLeft : lowerEndRight) -
-                    groupBox.get('position').y + PADDING;
+                  groupBox.get('position').y + PADDING;
   groupBox.set('size', {
-    width: groupBox.get('size').width,
+    width: rightEnd - groupBox.get('position').x,
     height: groupHeight 
   });
   var multiplicityContainer = MultiplicityContainer.clone();
   multiplicityContainer.attr('text/text', infoGroup.multiplicity);
-  multiplicityContainer.translate(groupBox.getBBox().topRight().x
-    -(multiplicityContainer.get('size').width + PADDING), groupBox.getBBox().topRight().y);
+  multiplicityContainer.translate(groupBox.getBBox().origin().x + 5,
+    groupBox.getBBox().origin().y) ;
+  groupIdBox.translate(groupBox.getBBox().bottomLeft().x - groupIdBox.get('size').width / 3, groupBox.getBBox().bottomLeft().y - groupBox.get('size').height / 2);
+  groupIdBox.rotate(-90); 
   groupBox.embed(groupIdBox);
   groupBox.embed(multiplicityContainer);
   collectionSet.map( function (collection) {
@@ -564,7 +580,7 @@ function displayPropertyLinks(property, graph, jointJsMiddleman) {
 
 /* Maps @groups, @collections, @tasks that are in main */
 function mapTemplate(contentMain) {
-  var shifterX = PADDING;
+  var shifterY = PADDING;
   var collectionYielder = CollectionElement.clone();
   collectionYielder.set('position', {
     x: COLLECTION_METRICS.x,
@@ -579,14 +595,16 @@ function mapTemplate(contentMain) {
       console.log(task.prop('properties'));
     });
     var colCell = collectionYielder.clone();
+    colCell.translate(PAPER_MIDPOINT - (COLLECTION_METRICS.widthMin / 2),0)
     var collection = populateCollection(colCell, collectData);
-    shifterX = collection.getBBox().corner().x + PADDING;
+    shifterY = collection.getBBox().corner().y + PADDING;
     collectionYielder.set('position', {
-      x: shifterX,
-      y: collectionYielder.get('position').y
+      x: collectionYielder.get('position').x,
+      y: shifterY
     })
     displayCollection(collection, collectData);
   }
+  var groupWidth = 0;
   var GroupYielder = GroupElement.clone();
   for (var i = 0; i < contentMain.groups.length; i ++) {
     var groupCollections = contentMain.groups[i].collections.map( function (collection) {
@@ -611,19 +629,29 @@ function mapTemplate(contentMain) {
       multiplicity: contentMain.groups[i].multiplicity,
       tasks: groupTasks
     }
-    var group = populateGroup(GroupYielder.clone(), tObject);
-    shifterX = group[0].plot.getBBox().corner().x + 2 * PADDING;    
+    var groupCell = GroupYielder.clone();
+    groupCell.translate(PAPER_MIDPOINT, 0);
+    var group = populateGroup(groupCell, tObject);
+    shifterY = group[0].plot.getBBox().corner().y + 2 * PADDING;
+    if (groupWidth < group[0].plot.get('size').width) {
+      groupWidth = group[0].plot.get('size').width
+    }    
     GroupYielder.set('position', {
-      x: shifterX,
-      y: GROUP_METRICS.y,
+      x: GROUP_METRICS.x,
+      y: shifterY
     });
     displayGroup(group[0], group[1]);
   }
   for (var i = 0; i < contentMain.tasks.length; i ++) {
     var mainTask = taskFactory(contentMain.tasks[i].taskId);
-    mainTask.translate(shifterX, TASK_METRICS.y);
-    mainTask.translate((i / 5) * (TASK_METRICS.width + PADDING),
+    if ( contentMain.tasks.length > 5) {
+      mainTask.translate(PAPER_MIDPOINT, shifterY);
+      mainTask.translate((i / 5) * (TASK_METRICS.width + PADDING),
         i * (TASK_METRICS.height + PADDING));
+    } else {
+      mainTask.translate((PAPER_MIDPOINT + groupWidth / 2 - TASK_METRICS.width / 2), shifterY);
+      mainTask.translate(0, i * (TASK_METRICS.height + PADDING));
+    }
     mainTask.prop('properties', contentMain.tasks[i].properties);
     displayTask(mainTask);
   }
@@ -696,34 +724,13 @@ var paper = new joint.dia.Paper({
     width: 600,
     height: 500,
     model: graph,
-    gridSize: 1
+    gridSize: 1,
+    interactive: false
 });
 
 /* event handlers */
 graph.on('all', function(eventName, cell) {
       //console.log(arguments);
-});
-
-paper.on('cell:mouseover', function(cellView) {
-  if (cellView.model instanceof joint.dia.Element) {
-    if (cellView.model.prop('draggable') == 'OFF') {
-      console.log('here');
-        cellView.model.attr('rect/style/pointer-events', 'none');
-        cellView.model.attr('text/style/pointer-events', 'none');
-        return;
-    }
-  }  
-});
-
-paper.on('cell:mouseout', function(cellView) {
-  if (cellView.model instanceof joint.dia.Element) {
-    if (cellView.model.prop('draggable') == 'OFF') {
-      console.log('out');
-      cellView.model.attr('rect/style/pointer-events', 'none');
-      cellView.model.attr('text/style/pointer-events', 'none');
-      return;
-    }
-  }
 });
 
 graph.on('change:position', function(cell) {
@@ -735,13 +742,14 @@ graph.on('change:position', function(cell) {
   var parentBbox = parent.getBBox();
   var cellBbox = cell.getBBox();
 
-  if (parentBbox.containsPoint(cellBbox.origin()) &&
+  if ((parentBbox.containsPoint(cellBbox.origin()) &&
     parentBbox.containsPoint(cellBbox.topRight()) &&
     parentBbox.containsPoint(cellBbox.corner()) &&
-    parentBbox.containsPoint(cellBbox.bottomLeft())) {
+    parentBbox.containsPoint(cellBbox.bottomLeft())) ||
+    cell.get('angle') === -90) {
 
     // All the four corners of the child are inside
-    // the parent area
+    // the parent area or the cell is a rotated title
     return;
   }
 
